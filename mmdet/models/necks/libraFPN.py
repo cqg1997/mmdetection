@@ -48,15 +48,24 @@ class libraFPN(nn.Module):
         self.refine_type = refine_type
         assert 0 <= self.refine_level < self.num_levels
 
-        self.refine_convs = nn.ModuleList()
-        for i in range(num_levels):
+        self.refine_convs_02 = nn.ModuleList()
+        self.refine_convs_24 = nn.ModuleList()
+        for i in range(3):
             refine_conv = ConvModule(
                 in_channels*num_levels,
                 in_channels,
                 3,
                 padding=1,
                 groups=in_channels)
-            self.refine_convs.append(refine_conv)
+            self.refine_convs_02.append(refine_conv)
+        for i in range(3):
+            refine_conv = ConvModule(
+                in_channels*num_levels,
+                in_channels,
+                3,
+                padding=1,
+                groups=in_channels)
+            self.refine_convs_24.append(refine_conv)
 
     def init_weights(self):
         """Initialize the weights of FPN module."""
@@ -67,14 +76,18 @@ class libraFPN(nn.Module):
     def forward(self, inputs):
         """Forward function."""
         assert len(inputs) == self.num_levels
+        inter_outs = inputs
 
-        # step 1: gather multi-level features by resize and average
+        # step 1: 0-2nd layers
+        refine_level = 1
+        # step 1.1: gather multi-level features by resize and average
         feats = []
-        gather_size = inputs[self.refine_level].size()[2:]
-        sum_size = list(inputs[self.refine_level].size())
-        sum_size[1] *= self.num_levels
-        for i in range(self.num_levels):
-            if i < self.refine_level:
+        gather_size = inputs[refine_level].size()[2:]
+        sum_size = list(inputs[refine_level].size())
+        sum_size[1] *= 3
+
+        for i in range(0, 3):
+            if i < refine_level:
                 gathered = F.adaptive_max_pool2d(
                     inputs[i], output_size=gather_size)
             else:
@@ -84,16 +97,43 @@ class libraFPN(nn.Module):
 
         bsf = torch.cat(feats, dim=2).reshape(sum_size)
 
-
         # step 3: scatter refined features to multi-levels by a residual path
-        outs = []
-        for i in range(self.num_levels):
+        for i in range(0, 3):
             out_size = inputs[i].size()[2:]
-            feat = self.refine_convs[i](bsf)
+            feat = self.refine_convs_02[i](bsf)
             if i < self.refine_level:
                 residual = F.interpolate(feat, size=out_size, mode='nearest')
             else:
                 residual = F.adaptive_max_pool2d(feat, output_size=out_size)
-            outs.append(residual + inputs[i])
+            inter_outs[i] += residual
 
-        return tuple(outs)
+            # step 1: 0-2nd layers
+            refine_level = 3
+            # step 1.1: gather multi-level features by resize and average
+            feats = []
+            gather_size = inputs[refine_level].size()[2:]
+            sum_size = list(inputs[refine_level].size())
+            sum_size[1] *= 3
+
+            for i in range(2, 5):
+                if i < refine_level:
+                    gathered = F.adaptive_max_pool2d(
+                        inter_outs[i], output_size=gather_size)
+                else:
+                    gathered = F.interpolate(
+                        inter_outs[i], size=gather_size, mode='nearest')
+                feats.append(gathered)
+
+            bsf = torch.cat(feats, dim=2).reshape(sum_size)
+
+            # step 3: scatter refined features to multi-levels by a residual path
+            for i in range(2, 5):
+                out_size = inputs[i].size()[2:]
+                feat = self.refine_convs_24[i](bsf)
+                if i < self.refine_level:
+                    residual = F.interpolate(feat, size=out_size, mode='nearest')
+                else:
+                    residual = F.adaptive_max_pool2d(feat, output_size=out_size)
+                inter_outs[i] += residual
+
+        return tuple(inter_outs)
