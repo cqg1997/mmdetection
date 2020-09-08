@@ -71,8 +71,8 @@ class libraFPN(nn.Module):
         # step 1: gather multi-level features by resize and average
         feats = []
         gather_size = inputs[self.refine_level].size()[2:]
-        sum_size = inputs[self.refine_level].size()
-        sum_size[1] *= len(inputs)
+        sum_size = list(inputs[self.refine_level].size())
+        sum_size[1] *= self.num_levels
         for i in range(self.num_levels):
             if i < self.refine_level:
                 gathered = F.adaptive_max_pool2d(

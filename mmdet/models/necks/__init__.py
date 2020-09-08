@@ -8,8 +8,9 @@ from .pafpn import PAFPN
 from .rfp import RFP
 from .yolo_neck import YOLOV3Neck
 from .pbfpn import PBFPN
+from .libraFPN import libraFPN
 
 __all__ = [
     'FPN', 'BFP', 'HRFPN', 'NASFPN', 'FPN_CARAFE', 'PAFPN', 'NASFCOS_FPN',
-    'RFP', 'YOLOV3Neck', 'PBFPN'
+    'RFP', 'YOLOV3Neck', 'PBFPN', 'libraFPN'
 ]
