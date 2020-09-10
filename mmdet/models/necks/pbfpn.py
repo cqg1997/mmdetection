@@ -86,18 +86,17 @@ class PBFPN(FPN):
            # d_f = nn.Conv2d(
            #     out_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=True,
            #     groups=out_channels)
-           # u_f = nn.Conv2d(
-           #     out_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=True,
-           #     groups=out_channels)
-            u_f = build_conv_layer(
-                dict(type='DCN', deform_groups=1),
-                out_channels,
-                out_channels,
-                kernel_size=3,
-                stride=1,
-                padding=2,
-                dilation=2,
-                bias=True)
+           u_f = nn.Conv2d(
+               out_channels, out_channels, kernel_size=3, stride=1, padding=2, dilation=2, bias=True)
+           #  u_f = build_conv_layer(
+           #      dict(type='DCN', deform_groups=1),
+           #      out_channels,
+           #      out_channels,
+           #      kernel_size=3,
+           #      stride=1,
+           #      padding=2,
+           #      dilation=2,
+           #      bias=True)
             
             # self.downsample_filter.append(d_f)
             self.upsample_filter.append(u_f)
