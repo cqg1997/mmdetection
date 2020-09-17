@@ -14,7 +14,7 @@ def sigmoid_focal_loss(pred,
     weight = (alpha * target + (1 - alpha) * (1 - target)) * weight
     weight = weight * pt.pow(gamma)
     return F.binary_cross_entropy_with_logits(
-        pred, target, weight, reduction=reduction)
+        pred, target, weight.detach(), reduction=reduction)
 
 
 def py_bin_sigmoid_focal_loss(pred,

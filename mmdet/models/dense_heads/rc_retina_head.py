@@ -54,7 +54,7 @@ class RCRetinaHead(AnchorHead):
         self.conv_cfg = conv_cfg
         self.norm_cfg = norm_cfg
         self.region_generator = build_anchor_generator(region_generator)
-        self.region_assigner = build_assigner(assigner=dict(
+        self.region_assigner = build_assigner(dict(
             type='IoMAssigner',
             pos_iom_thr=0.64,
             neg_iom_thr=0.42,
@@ -154,7 +154,7 @@ class RCRetinaHead(AnchorHead):
             reg_feat = reg_conv(reg_feat)
         cls_score = self.retina_cls(cls_feat)
         bbox_pred = self.retina_reg(reg_feat)
-        region_cls = self.retina_reg(region_feat)
+        region_cls = self.region_cls(region_feat)
         return region_cls, cls_score, bbox_pred
 
     def loss_region_single(self, region_cls, anchors, labels, label_weights, num_total_samples):
@@ -195,7 +195,7 @@ class RCRetinaHead(AnchorHead):
             gamma=2.0,
             alpha=0.25,
             avg_factor=num_total_samples)
-        return loss_region_cls
+        return loss_region_cls[0],None
 
     def loss(self,
              region_cls,
@@ -214,9 +214,7 @@ class RCRetinaHead(AnchorHead):
         featmap_sizes = [featmap.size()[-2:] for featmap in region_cls]
 
         assert len(featmap_sizes) == self.region_generator.num_levels
-
         device = region_cls[0].device
-
         anchor_list, valid_flag_list = self.get_regions(
             featmap_sizes, img_metas, device=device)
         label_channels = self.cls_out_channels if self.use_sigmoid_cls else 1
@@ -244,14 +242,14 @@ class RCRetinaHead(AnchorHead):
         all_anchor_list = images_to_levels(concat_anchor_list,
                                            num_level_anchors)
 
-        losses_region_cls = multi_apply(
+        losses_region_cls, _ = multi_apply(
             self.loss_region_single,
             region_cls,
             all_anchor_list,
             labels_list,
             label_weights_list,
             num_total_samples=num_total_samples)
-        loss.update(loss_region_cls=losses_region_cls)
+        loss.update(dict(loss_region_cls=losses_region_cls))
         return loss
 
     def get_regions(self, featmap_sizes, img_metas, device='cuda'):
@@ -309,16 +307,22 @@ class RCRetinaHead(AnchorHead):
                                                      gt_bboxes)
 
         num_valid_anchors = anchors.shape[0]
-        labels = anchors.new_full((num_valid_anchors, label_channels),
-                                  self.background_label,
-                                  dtype=torch.long)
+        num_gts = gt_labels.shape[0]
+        # labels = anchors.new_full((num_gts, label_channels, num_valid_anchors),
+        #                           self.background_label,
+        #                           dtype=torch.long)
         label_weights = anchors.new_zeros((num_valid_anchors, label_channels), dtype=torch.float)
 
         pos_inds = sampling_result.pos_inds
         neg_inds = sampling_result.neg_inds
+        labels = []
         if len(pos_inds) > 0:
-            for gt_label, assign_per_gt in zip(gt_labels, assign_result.gt_inds):
-                labels[:, gt_label - 1][assign_per_gt > 0] = 1
+            for label in  assign_result.gt_inds:
+                bin_label = label.new_full((label.size(0), label_channels),0)
+                inds = torch.nonzero(label >= 1).squeeze()
+                if inds.numel() > 0:
+                    bin_label[inds, label[inds] - 1] = 1
+                labels.append(bin_label)
 
             if self.train_cfg.pos_weight <= 0:
                 label_weights[pos_inds, :] = 1.0
@@ -326,6 +330,8 @@ class RCRetinaHead(AnchorHead):
                 label_weights[pos_inds, :] = self.train_cfg.pos_weight
         if len(neg_inds) > 0:
             label_weights[neg_inds, :] = 1.0
+        labels = torch.cat(labels,dim=0).reshape(num_gts, num_valid_anchors, label_channels).sum(dim=0)
+        labels[labels>0]=1
 
         # map up to original set of anchors
         if unmap_outputs:

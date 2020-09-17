@@ -31,8 +31,10 @@ class SamplingResult(util_mixins.NiceRepr):
         self.pos_is_gt = gt_flags[pos_inds]
 
         self.num_gts = gt_bboxes.shape[0]
-        self.pos_assigned_gt_inds = assign_result.gt_inds[pos_inds] - 1
-
+        if assign_result.gt_inds.dim() == 1:
+            self.pos_assigned_gt_inds = assign_result.gt_inds[pos_inds] - 1
+        else:
+            self.pos_assigned_gt_inds = None
         if gt_bboxes.numel() == 0:
             # hack for index error case
             assert self.pos_assigned_gt_inds.numel() == 0

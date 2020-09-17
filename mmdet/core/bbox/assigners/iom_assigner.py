@@ -182,7 +182,7 @@ class IoMAssigner(BaseAssigner):
         # 3. assign positive: above positive IoU threshold
         assigned_gt_inds[:, max_overlaps > self.pos_iom_thr] = 0
         pos_idx = overlaps > self.pos_iom_thr
-        assigned_gt_inds[pos_idx] = gt_labels.view(-1, 1).repeat([1, num_bboxes])[pos_idx]
+        assigned_gt_inds[pos_idx] = gt_labels.view(-1, 1).repeat([1, num_bboxes])[pos_idx]+1
 
         assigned_labels = None
 
