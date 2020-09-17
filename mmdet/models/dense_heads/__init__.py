@@ -21,6 +21,7 @@ from .rpn_head import RPNHead
 from .sabl_retina_head import SABLRetinaHead
 from .ssd_head import SSDHead
 from .yolo_head import YOLOV3Head
+from .rc_retina_head import RCRetinaHead
 
 __all__ = [
     'AnchorFreeHead', 'AnchorHead', 'GuidedAnchorHead', 'FeatureAdaption',
@@ -28,5 +29,5 @@ __all__ = [
     'SSDHead', 'FCOSHead', 'RepPointsHead', 'FoveaHead',
     'FreeAnchorRetinaHead', 'ATSSHead', 'FSAFHead', 'NASFCOSHead',
     'PISARetinaHead', 'PISASSDHead', 'GFLHead', 'CornerHead', 'PAAHead',
-    'YOLOV3Head', 'SABLRetinaHead'
+    'YOLOV3Head', 'SABLRetinaHead', 'RCRetinaHead'
 ]

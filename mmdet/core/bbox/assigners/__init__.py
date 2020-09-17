@@ -6,8 +6,9 @@ from .center_region_assigner import CenterRegionAssigner
 from .grid_assigner import GridAssigner
 from .max_iou_assigner import MaxIoUAssigner
 from .point_assigner import PointAssigner
+from .iom_assigner import IoMAssigner
 
 __all__ = [
     'BaseAssigner', 'MaxIoUAssigner', 'ApproxMaxIoUAssigner', 'AssignResult',
-    'PointAssigner', 'ATSSAssigner', 'CenterRegionAssigner', 'GridAssigner'
+    'PointAssigner', 'ATSSAssigner', 'CenterRegionAssigner', 'GridAssigner', 'IoMAssigner'
 ]
