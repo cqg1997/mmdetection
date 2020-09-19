@@ -104,7 +104,7 @@ class IoMAssigner(BaseAssigner):
             if gt_labels is not None:
                 gt_labels = gt_labels.cpu()
 
-        overlaps = self.iou_calculator(gt_bboxes, bboxes, mode='iom')
+        overlaps = self.iou_calculator(gt_bboxes, bboxes, mode='ioMin')
 
         if (self.ignore_iof_thr > 0 and gt_bboxes_ignore is not None
                 and gt_bboxes_ignore.numel() > 0 and bboxes.numel() > 0):
@@ -117,6 +117,11 @@ class IoMAssigner(BaseAssigner):
                     gt_bboxes_ignore, bboxes, mode='iof')
                 ignore_max_overlaps, _ = ignore_overlaps.max(dim=0)
             overlaps[:, ignore_max_overlaps > self.ignore_iof_thr] = -1
+        if (self.min_iom2_thr > 0):
+            IoMax_overlaps = self.iou_calculator(
+                    gt_bboxes, bboxes, mode='ioMax')
+            ignore_idx = IoMax_overlaps < self.min_iom2_thr
+            overlaps[ignore_idx] = (self.pos_iom_thr + self.neg_iom_thr)/2 
 
         assign_result = self.assign_wrt_overlaps(overlaps, gt_labels)
         if assign_on_cpu:
@@ -181,7 +186,7 @@ class IoMAssigner(BaseAssigner):
 
         # 3. assign positive: above positive IoU threshold
         assigned_gt_inds[:, max_overlaps > self.pos_iom_thr] = 0
-        pos_idx = overlaps > self.pos_iom_thr
+        pos_idx = overlaps > self.pos_iom_thr 
         assigned_gt_inds[pos_idx] = gt_labels.view(-1, 1).repeat([1, num_bboxes])[pos_idx]+1
 
         assigned_labels = None

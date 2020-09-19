@@ -79,7 +79,7 @@ def bbox_overlaps(bboxes1, bboxes2, mode='iou', is_aligned=False, eps=1e-6):
         >>> assert tuple(bbox_overlaps(empty, empty).shape) == (0, 0)
     """
 
-    assert mode in ['iou', 'iof', 'iom']
+    assert mode in ['iou', 'iof', 'ioMin', 'ioMax']
     # Either the boxes are empty or the length of boxes's last dimenstion is 4
     assert (bboxes1.size(-1) == 4 or bboxes1.size(0) == 0)
     assert (bboxes2.size(-1) == 4 or bboxes2.size(0) == 0)
@@ -107,10 +107,15 @@ def bbox_overlaps(bboxes1, bboxes2, mode='iou', is_aligned=False, eps=1e-6):
             union = area1 + area2 - overlap
         elif mode == 'iof':
             union = area1
-        elif mode == 'iom':
+        elif mode == 'ioMin':
             area2 = (bboxes2[:, 2] - bboxes2[:, 0]) * (
                     bboxes2[:, 3] - bboxes2[:, 1])
             union = torch.min(area1, area2)
+        elif mode == 'ioMax':
+            area2 = (bboxes2[:, 2] - bboxes2[:, 0]) * (
+                    bboxes2[:, 3] - bboxes2[:, 1])
+            union = torch.max(area1, area2)
+
     else:
         lt = torch.max(bboxes1[:, None, :2], bboxes2[:, :2])  # [rows, cols, 2]
         rb = torch.min(bboxes1[:, None, 2:], bboxes2[:, 2:])  # [rows, cols, 2]
@@ -126,10 +131,14 @@ def bbox_overlaps(bboxes1, bboxes2, mode='iou', is_aligned=False, eps=1e-6):
             union = area1[:, None] + area2 - overlap
         elif mode == 'iof':
             union = area1[:, None]
-        elif mode == 'iom':
+        elif mode == 'ioMin':
             area2 = (bboxes2[:, 2] - bboxes2[:, 0]) * (
                     bboxes2[:, 3] - bboxes2[:, 1])
             union = torch.min(area1[:, None], area2)
+        elif mode == 'ioMax':
+            area2 = (bboxes2[:, 2] - bboxes2[:, 0]) * (
+                    bboxes2[:, 3] - bboxes2[:, 1])
+            union = torch.max(area1[:, None], area2)        
 
     eps = union.new_tensor([eps])
     union = torch.max(union, eps)

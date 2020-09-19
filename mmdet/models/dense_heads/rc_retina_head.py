@@ -58,7 +58,7 @@ class RCRetinaHead(AnchorHead):
             type='IoMAssigner',
             pos_iom_thr=0.64,
             neg_iom_thr=0.42,
-            min_iom2_thr=0.0,
+            min_iom2_thr=0.05,
             ignore_iof_thr=-1))
         self.region_sampler = build_sampler(dict(type='PseudoRegionSampler'), context=self)
         super(RCRetinaHead, self).__init__(
@@ -328,10 +328,12 @@ class RCRetinaHead(AnchorHead):
                 label_weights[pos_inds, :] = 1.0
             else:
                 label_weights[pos_inds, :] = self.train_cfg.pos_weight
+            labels = torch.cat(labels,dim=0).reshape(num_gts, num_valid_anchors, label_channels).sum(dim=0)
+            labels[labels>0]=1
+        else:
+            labels = anchors.new_full((num_valid_anchors, label_channels),0, dtype=torch.long)
         if len(neg_inds) > 0:
             label_weights[neg_inds, :] = 1.0
-        labels = torch.cat(labels,dim=0).reshape(num_gts, num_valid_anchors, label_channels).sum(dim=0)
-        labels[labels>0]=1
 
         # map up to original set of anchors
         if unmap_outputs:
