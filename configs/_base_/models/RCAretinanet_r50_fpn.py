@@ -19,7 +19,7 @@ model = dict(
         add_extra_convs='on_input',
         num_outs=5),
     bbox_head=dict(
-        type='RCRetinaHead',
+        type='RetinaHead',
         num_classes=80,
         in_channels=256,
         stacked_convs=4,
@@ -40,7 +40,18 @@ model = dict(
             gamma=2.0,
             alpha=0.25,
             loss_weight=1.0),
-        loss_bbox=dict(type='L1Loss', loss_weight=1.0)))
+        loss_bbox=dict(type='L1Loss', loss_weight=1.0)),
+    CA_head=dict(
+        type='RCHead',
+        num_classes=80,
+        in_channels=256,
+        stacked_convs=4,
+        feat_channels=256,
+        region_generator=dict(type='AnchorGenerator',
+                              octave_base_scale=4 * 2.243,
+                              scales_per_octave=1,
+                              ratios=[1.0],
+                              strides=[8, 16, 32, 64, 128])))
 # training and testing settings
 train_cfg = dict(
     assigner=dict(

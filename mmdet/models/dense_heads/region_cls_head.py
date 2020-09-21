@@ -7,11 +7,11 @@ from mmdet.core import (anchor_inside_flags, build_anchor_generator,
                         multiclass_nms, unmap)
 from ..losses import py_bin_sigmoid_focal_loss
 from ..builder import HEADS
-from .anchor_head import AnchorHead
+from .base_dense_head import BaseDenseHead
 
 
 @HEADS.register_module()
-class RCRetinaHead(AnchorHead):
+class RCHead(BaseDenseHead):
     r"""An anchor-based head used in `RetinaNet
     <https://arxiv.org/pdf/1708.02002.pdf>`_.
 
@@ -36,19 +36,19 @@ class RCRetinaHead(AnchorHead):
                  stacked_convs=4,
                  conv_cfg=None,
                  norm_cfg=None,
-                 anchor_generator=dict(
-                     type='AnchorGenerator',
-                     octave_base_scale=4,
-                     scales_per_octave=3,
-                     ratios=[0.5, 1.0, 2.0],
-                     strides=[8, 16, 32, 64, 128]),
+                 region_generator=dict(
+                                    type='AnchorGenerator',
+                                    octave_base_scale=4 * 2.243,
+                                    scales_per_octave=1,
+                                    ratios=[1.0],
+                                    strides=[8, 16, 32, 64, 128]),
                  **kwargs):
 
-        super(RCRetinaHead, self).__init__()
+        super(RCHead, self).__init__()
 
         region_generator = dict(
             type='AnchorGenerator',
-            octave_base_scale=4 * 2.243,
+            octave_base_scale=4 * 2.243,  # 2e(1/2+2/3)
             scales_per_octave=1,
             ratios=[1.0],
             strides=[8, 16, 32, 64, 128])
@@ -63,38 +63,14 @@ class RCRetinaHead(AnchorHead):
             min_iom2_thr=0.05,
             ignore_iof_thr=-1))
         self.region_sampler = build_sampler(dict(type='PseudoRegionSampler'), context=self)
-        super(RCRetinaHead, self).__init__(
-            num_classes,
-            in_channels,
-            anchor_generator=anchor_generator,
-            **kwargs)
+
 
     def _init_layers(self):
         """Initialize layers of the head."""
         self.relu = nn.ReLU(inplace=True)
-        self.cls_convs = nn.ModuleList()
-        self.reg_convs = nn.ModuleList()
         self.region_convs = nn.ModuleList()
         for i in range(self.stacked_convs):
             chn = self.in_channels if i == 0 else self.feat_channels
-            self.cls_convs.append(
-                ConvModule(
-                    chn,
-                    self.feat_channels,
-                    3,
-                    stride=1,
-                    padding=1,
-                    conv_cfg=self.conv_cfg,
-                    norm_cfg=self.norm_cfg))
-            self.reg_convs.append(
-                ConvModule(
-                    chn,
-                    self.feat_channels,
-                    3,
-                    stride=1,
-                    padding=1,
-                    conv_cfg=self.conv_cfg,
-                    norm_cfg=self.norm_cfg))
             self.region_convs.append(
                 ConvModule(
                     chn,
@@ -104,13 +80,6 @@ class RCRetinaHead(AnchorHead):
                     padding=1,
                     conv_cfg=self.conv_cfg,
                     norm_cfg=self.norm_cfg))
-        self.retina_cls = nn.Conv2d(
-            self.feat_channels,
-            self.num_anchors * self.cls_out_channels,
-            3,
-            padding=1)
-        self.retina_reg = nn.Conv2d(
-            self.feat_channels, self.num_anchors * 4, 3, padding=1)
         self.region_cls = nn.Conv2d(
             self.feat_channels,
             self.cls_out_channels,
@@ -119,15 +88,9 @@ class RCRetinaHead(AnchorHead):
 
     def init_weights(self):
         """Initialize weights of the head."""
-        for m in self.cls_convs:
-            normal_init(m.conv, std=0.01)
-        for m in self.reg_convs:
-            normal_init(m.conv, std=0.01)
         for m in self.region_convs:
             normal_init(m.conv, std=0.01)
         bias_cls = bias_init_with_prob(0.01)
-        normal_init(self.retina_cls, std=0.01, bias=bias_cls)
-        normal_init(self.retina_reg, std=0.01)
         normal_init(self.region_cls, std=0.01, bias=bias_cls)
 
     def forward_single(self, x):
@@ -150,14 +113,12 @@ class RCRetinaHead(AnchorHead):
             region_feat = region_conv(region_feat)
         # ? ? ? ? ? ? residual structure
         # cls_feat += region_feat
-        for cls_conv in self.cls_convs:
-            cls_feat = cls_conv(cls_feat)
-        for reg_conv in self.reg_convs:
-            reg_feat = reg_conv(reg_feat)
-        cls_score = self.retina_cls(cls_feat)
-        bbox_pred = self.retina_reg(reg_feat)
         region_cls = self.region_cls(region_feat)
-        return region_cls, cls_score, bbox_pred
+        return region_cls, None
+
+    def forward(self, feats):
+        ret, _ = multi_apply(self.forward_single, feats)
+        return ret
 
     def loss_region_single(self, region_cls, anchors, labels, label_weights, num_total_samples):
         """Compute loss of a single scale level.
@@ -201,18 +162,11 @@ class RCRetinaHead(AnchorHead):
 
     def loss(self,
              region_cls,
-             cls_scores,
-             bbox_preds,
              gt_bboxes,
              gt_labels,
              img_metas,
              gt_bboxes_ignore=None):
-        loss = super(RCRetinaHead, self).loss(cls_scores,
-                                              bbox_preds,
-                                              gt_bboxes,
-                                              gt_labels,
-                                              img_metas,
-                                              gt_bboxes_ignore)
+
         featmap_sizes = [featmap.size()[-2:] for featmap in region_cls]
 
         assert len(featmap_sizes) == self.region_generator.num_levels
@@ -251,7 +205,7 @@ class RCRetinaHead(AnchorHead):
             labels_list,
             label_weights_list,
             num_total_samples=num_total_samples)
-        loss.update(dict(loss_region_cls=losses_region_cls))
+        loss = dict(loss_region_cls=losses_region_cls)
         return loss
 
     def get_regions(self, featmap_sizes, img_metas, device='cuda'):
@@ -298,7 +252,7 @@ class RCRetinaHead(AnchorHead):
                                            img_meta['img_shape'][:2],
                                            self.train_cfg.allowed_border)
         if not inside_flags.any():
-            return (None,) * 7
+            return (None,) * 5
         # assign gt and sample anchors
         anchors = flat_anchors[inside_flags, :]
 
@@ -406,17 +360,3 @@ class RCRetinaHead(AnchorHead):
                num_total_pos, num_total_neg)
 
         return res
-
-    def get_bboxes(self,
-                   region_cls,
-                   cls_scores,
-                   bbox_preds,
-                   img_metas,
-                   cfg=None,
-                   rescale=False):
-        return super(RCRetinaHead, self).get_bboxes(
-                   cls_scores,
-                   bbox_preds,
-                   img_metas,
-                   cfg=None,
-                   rescale=False)
