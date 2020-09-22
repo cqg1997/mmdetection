@@ -121,7 +121,7 @@ class IoMAssigner(BaseAssigner):
             IoMax_overlaps = self.iou_calculator(
                     gt_bboxes, bboxes, mode='ioMax')
             ignore_idx = IoMax_overlaps < self.min_iom2_thr
-            overlaps[ignore_idx] = (self.pos_iom_thr + self.neg_iom_thr)/2 
+            overlaps[ignore_idx] = -1 
 
         assign_result = self.assign_wrt_overlaps(overlaps, gt_labels)
         if assign_on_cpu:

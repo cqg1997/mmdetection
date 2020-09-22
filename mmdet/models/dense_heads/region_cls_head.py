@@ -33,6 +33,7 @@ class RCHead(BaseDenseHead):
     def __init__(self,
                  num_classes,
                  in_channels,
+                 feat_channels,
                  stacked_convs=4,
                  conv_cfg=None,
                  norm_cfg=None,
@@ -42,10 +43,17 @@ class RCHead(BaseDenseHead):
                                     scales_per_octave=1,
                                     ratios=[1.0],
                                     strides=[8, 16, 32, 64, 128]),
-                 **kwargs):
+                 train_cfg=None,
+                 test_cfg=None):
 
         super(RCHead, self).__init__()
-
+        self.in_channels = in_channels
+        self.num_classes = num_classes
+        self.feat_channels = feat_channels
+        self.cls_out_channels = num_classes
+        self.use_sigmoid_cls = True
+        self.sampling = False
+        self.background_label = 0
         region_generator = dict(
             type='AnchorGenerator',
             octave_base_scale=4 * 2.243,  # 2e(1/2+2/3)
@@ -63,6 +71,10 @@ class RCHead(BaseDenseHead):
             min_iom2_thr=0.05,
             ignore_iof_thr=-1))
         self.region_sampler = build_sampler(dict(type='PseudoRegionSampler'), context=self)
+
+        self.train_cfg = train_cfg
+        self.test_cfg = test_cfg
+        self._init_layers()
 
 
     def _init_layers(self):
@@ -117,7 +129,7 @@ class RCHead(BaseDenseHead):
         return region_cls, None
 
     def forward(self, feats):
-        ret, _ = multi_apply(self.forward_single, feats)
+        ret = multi_apply(self.forward_single, feats)
         return ret
 
     def loss_region_single(self, region_cls, anchors, labels, label_weights, num_total_samples):
@@ -162,6 +174,7 @@ class RCHead(BaseDenseHead):
 
     def loss(self,
              region_cls,
+             placeholder,
              gt_bboxes,
              gt_labels,
              img_metas,
@@ -360,3 +373,12 @@ class RCHead(BaseDenseHead):
                num_total_pos, num_total_neg)
 
         return res
+
+    @force_fp32(apply_to=('cls_scores', 'bbox_preds'))
+    def get_bboxes(self,
+                   cls_scores,
+                   bbox_preds,
+                   img_metas,
+                   cfg=None,
+                   rescale=False):
+        raise NotImplementedError
