@@ -68,7 +68,7 @@ class RCHead(BaseDenseHead):
             type='IoMAssigner',
             pos_iom_thr=0.64,
             neg_iom_thr=0.42,
-            min_iom2_thr=0.05,
+            min_iom2_thr=0.00,
             ignore_iof_thr=-1))
         self.region_sampler = build_sampler(dict(type='PseudoRegionSampler'), context=self)
 
@@ -126,7 +126,7 @@ class RCHead(BaseDenseHead):
         # ? ? ? ? ? ? residual structure
         # cls_feat += region_feat
         region_cls = self.region_cls(region_feat)
-        return region_cls, None
+        return region_cls, region_feat
 
     def forward(self, feats):
         ret = multi_apply(self.forward_single, feats)
@@ -174,7 +174,6 @@ class RCHead(BaseDenseHead):
 
     def loss(self,
              region_cls,
-             placeholder,
              gt_bboxes,
              gt_labels,
              img_metas,

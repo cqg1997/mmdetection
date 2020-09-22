@@ -95,8 +95,11 @@ class RCARetinaNet(BaseDetector):
             dict[str, Tensor]: A dictionary of loss components.
         """
         x = self.extract_feat(img)
-        losses_region_cls = self.ca_head.forward_train(x, img_metas, gt_bboxes,
-                                                       gt_labels, gt_bboxes_ignore)
+        cls_feat, hint = self.ca_head(x)
+        loss_inputs = cls_feat + (gt_bboxes, img_metas)
+        losses_region_cls = self.ca_head.loss(*loss_inputs, gt_bboxes_ignore=gt_bboxes_ignore)
+
+        x += hint
         losses = self.bbox_head.forward_train(x, img_metas, gt_bboxes,
                                               gt_labels, gt_bboxes_ignore)
         losses.update(losses_region_cls)
