@@ -126,7 +126,9 @@ class RCHead(BaseDenseHead):
         # ? ? ? ? ? ? residual structure
         # cls_feat += region_feat
         region_cls = self.region_cls(region_feat)
+
         hint =  x #+ region_feat
+
         return region_cls, hint
 
     def forward(self, feats):
