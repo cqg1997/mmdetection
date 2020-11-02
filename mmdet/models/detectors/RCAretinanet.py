@@ -95,12 +95,11 @@ class RCARetinaNet(BaseDetector):
             dict[str, Tensor]: A dictionary of loss components.
         """
         x = self.extract_feat(img)
-        cls_feat, hint = self.ca_head(x)
-        loss_inputs = cls_feat + (gt_bboxes, img_metas)
+        inter_outs  = self.ca_head(x)
+        loss_inputs = inter_outs + (gt_bboxes, gt_labels, img_metas)
         losses_region_cls = self.ca_head.loss(*loss_inputs, gt_bboxes_ignore=gt_bboxes_ignore)
 
-        x += hint
-        losses = self.bbox_head.forward_train(x, img_metas, gt_bboxes,
+        losses = self.bbox_head.forward_train(inter_outs[1], img_metas, gt_bboxes,
                                               gt_labels, gt_bboxes_ignore)
         losses.update(losses_region_cls)
         return losses
@@ -122,7 +121,8 @@ class RCARetinaNet(BaseDetector):
                 corresponds to each class.
         """
         x = self.extract_feat(img)
-        outs = self.bbox_head(x)
+        inter_outs = self.ca_head(x)
+        outs = self.bbox_head(inter_outs[1])
         bbox_list = self.bbox_head.get_bboxes(
             *outs, img_metas, rescale=rescale)
         # skip post-processing when exporting to ONNX
