@@ -2,10 +2,10 @@ import torch
 import torch.nn as nn
 from mmcv.cnn import normal_init
 
-from mmdet.core import (anchor_inside_flags, bbox_overlaps,
-                        build_anchor_generator, build_assigner,
-                        build_bbox_coder, build_sampler, force_fp32,
-                        images_to_levels, multi_apply, multiclass_nms, unmap)
+from mmdet.core import (anchor_inside_flags, build_anchor_generator,
+                        build_assigner, build_bbox_coder, build_sampler,
+                        force_fp32, images_to_levels, multi_apply,
+                        multiclass_nms, unmap)
 from ..builder import HEADS, build_loss
 from .base_dense_head import BaseDenseHead
 
@@ -13,7 +13,6 @@ from .base_dense_head import BaseDenseHead
 @HEADS.register_module()
 class AnchorHead(BaseDenseHead):
     """Anchor-based head (RPN, RetinaNet, SSD, etc.).
-
     Args:
         num_classes (int): Number of categories excluding the background
             category.
@@ -51,14 +50,6 @@ class AnchorHead(BaseDenseHead):
                      type='CrossEntropyLoss',
                      use_sigmoid=True,
                      loss_weight=1.0),
-                 use_vfl=False,
-                 loss_cls_vfl=dict(
-                     type='VarifocalLoss',
-                     use_sigmoid=True,
-                     alpha=0.75,
-                     gamma=2.0,
-                     iou_weighted=True,
-                     loss_weight=1.0),
                  loss_bbox=dict(
                      type='SmoothL1Loss', beta=1.0 / 9.0, loss_weight=1.0),
                  train_cfg=None,
@@ -88,11 +79,7 @@ class AnchorHead(BaseDenseHead):
                 or self.background_label == num_classes)
 
         self.bbox_coder = build_bbox_coder(bbox_coder)
-        self.use_vfl = use_vfl
-        if self.use_vfl:
-            self.loss_cls = build_loss(loss_cls_vfl)
-        else:
-            self.loss_cls = build_loss(loss_cls)
+        self.loss_cls = build_loss(loss_cls)
         self.loss_bbox = build_loss(loss_bbox)
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
@@ -125,10 +112,8 @@ class AnchorHead(BaseDenseHead):
 
     def forward_single(self, x):
         """Forward feature of a single scale level.
-
         Args:
             x (Tensor): Features of a single scale level.
-
         Returns:
             tuple:
                 cls_score (Tensor): Cls scores for a single scale level \
@@ -142,14 +127,11 @@ class AnchorHead(BaseDenseHead):
 
     def forward(self, feats):
         """Forward features from the upstream network.
-
         Args:
             feats (tuple[Tensor]): Features from the upstream network, each is
                 a 4D-tensor.
-
         Returns:
             tuple: A tuple of classification scores and bbox prediction.
-
                 - cls_scores (list[Tensor]): Classification scores for all \
                     scale levels, each is a 4D-tensor, the channels number \
                     is num_anchors * num_classes.
@@ -161,12 +143,10 @@ class AnchorHead(BaseDenseHead):
 
     def get_anchors(self, featmap_sizes, img_metas, device='cuda'):
         """Get anchors according to feature map sizes.
-
         Args:
             featmap_sizes (list[tuple]): Multi-level feature map sizes.
             img_metas (list[dict]): Image meta info.
             device (torch.device | str): Device for returned tensors
-
         Returns:
             tuple:
                 anchor_list (list[Tensor]): Anchors of each image.
@@ -200,7 +180,6 @@ class AnchorHead(BaseDenseHead):
                             unmap_outputs=True):
         """Compute regression and classification targets for anchors in a
         single image.
-
         Args:
             flat_anchors (Tensor): Multi-level anchors of the image, which are
                 concatenated into a single tensor of shape (num_anchors ,4)
@@ -218,7 +197,6 @@ class AnchorHead(BaseDenseHead):
             label_channels (int): Channel of label.
             unmap_outputs (bool): Whether to map outputs back to the original
                 set of anchors.
-
         Returns:
             tuple:
                 labels_list (list[Tensor]): Labels of each level
@@ -301,7 +279,6 @@ class AnchorHead(BaseDenseHead):
                     return_sampling_results=False):
         """Compute regression and classification targets for anchors in
         multiple images.
-
         Args:
             anchor_list (list[list[Tensor]]): Multi level anchors of each
                 image. The outer list indicates images, and the inner list
@@ -319,10 +296,8 @@ class AnchorHead(BaseDenseHead):
             label_channels (int): Channel of label.
             unmap_outputs (bool): Whether to map outputs back to the original
                 set of anchors.
-
         Returns:
             tuple: Usually returns a tuple containing learning targets.
-
                 - labels_list (list[Tensor]): Labels of each level.
                 - label_weights_list (list[Tensor]): Label weights of each \
                     level.
@@ -394,7 +369,6 @@ class AnchorHead(BaseDenseHead):
     def loss_single(self, cls_score, bbox_pred, anchors, labels, label_weights,
                     bbox_targets, bbox_weights, num_total_samples):
         """Compute loss of a single scale level.
-
         Args:
             cls_score (Tensor): Box scores for each scale level
                 Has shape (N, num_anchors * num_classes, H, W).
@@ -413,7 +387,6 @@ class AnchorHead(BaseDenseHead):
             num_total_samples (int): If sampling, num total samples equal to
                 the number of total anchors; Otherwise, it is the number of
                 positive anchors.
-
         Returns:
             dict[str, Tensor]: A dictionary of loss components.
         """
@@ -422,6 +395,8 @@ class AnchorHead(BaseDenseHead):
         label_weights = label_weights.reshape(-1)
         cls_score = cls_score.permute(0, 2, 3,
                                       1).reshape(-1, self.cls_out_channels)
+        loss_cls = self.loss_cls(
+            cls_score, labels, label_weights, avg_factor=num_total_samples)
         # regression loss
         bbox_targets = bbox_targets.reshape(-1, 4)
         bbox_weights = bbox_weights.reshape(-1, 4)
@@ -429,31 +404,6 @@ class AnchorHead(BaseDenseHead):
         if self.reg_decoded_bbox:
             anchors = anchors.reshape(-1, 4)
             bbox_pred = self.bbox_coder.decode(anchors, bbox_pred)
-        if self.use_vfl:
-            anchors = anchors.reshape(-1, 4)
-            assert not self.reg_decoded_bbox
-            bbox_pred_decoded = self.bbox_coder.decode(anchors,
-                                                       bbox_pred.detach())
-            bbox_targets_decoded = self.bbox_coder.decode(
-                anchors, bbox_targets.detach())
-            ious = bbox_overlaps(
-                bbox_pred_decoded.detach(),
-                bbox_targets_decoded.detach(),
-                is_aligned=True)
-            pos_inds = ((labels >= 0)
-                        & (labels < self.num_classes)).nonzero().reshape(-1)
-            pos_labels = labels[pos_inds]
-            pos_ious = ious[pos_inds]
-            cls_iou_targets = torch.zeros_like(cls_score)
-            cls_iou_targets[pos_inds, pos_labels] = pos_ious
-            loss_cls = self.loss_cls(
-                cls_score,
-                cls_iou_targets,
-                label_weights.unsqueeze(1),
-                avg_factor=num_total_samples)
-        else:
-            loss_cls = self.loss_cls(
-                cls_score, labels, label_weights, avg_factor=num_total_samples)
         loss_bbox = self.loss_bbox(
             bbox_pred,
             bbox_targets,
@@ -470,7 +420,6 @@ class AnchorHead(BaseDenseHead):
              img_metas,
              gt_bboxes_ignore=None):
         """Compute losses of the head.
-
         Args:
             cls_scores (list[Tensor]): Box scores for each scale level
                 Has shape (N, num_anchors * num_classes, H, W)
@@ -483,7 +432,6 @@ class AnchorHead(BaseDenseHead):
                 image size, scaling factor, etc.
             gt_bboxes_ignore (None | list[Tensor]): specify which bounding
                 boxes can be ignored when computing the loss. Default: None
-
         Returns:
             dict[str, Tensor]: A dictionary of loss components.
         """
@@ -539,7 +487,6 @@ class AnchorHead(BaseDenseHead):
                    cfg=None,
                    rescale=False):
         """Transform network output for a batch into bbox predictions.
-
         Args:
             cls_scores (list[Tensor]): Box scores for each scale level
                 Has shape (N, num_anchors * num_classes, H, W)
@@ -551,7 +498,6 @@ class AnchorHead(BaseDenseHead):
                 if None, test_cfg would be used
             rescale (bool): If True, return boxes in original image space.
                 Default: False.
-
         Returns:
             list[tuple[Tensor, Tensor]]: Each item in result_list is 2-tuple.
                 The first item is an (n, 5) tensor, where the first 4 columns
@@ -559,7 +505,6 @@ class AnchorHead(BaseDenseHead):
                 5-th column is a score between 0 and 1. The second item is a
                 (n,) tensor where each item is the predicted class labelof the
                 corresponding box.
-
         Example:
             >>> import mmcv
             >>> self = AnchorHead(
@@ -619,7 +564,6 @@ class AnchorHead(BaseDenseHead):
                            cfg,
                            rescale=False):
         """Transform outputs for a single batch item into bbox predictions.
-
         Args:
             cls_score_list (list[Tensor]): Box scores for a single scale level
                 Has shape (num_anchors * num_classes, H, W).
@@ -634,7 +578,6 @@ class AnchorHead(BaseDenseHead):
             cfg (mmcv.Config): Test / postprocessing configuration,
                 if None, test_cfg would be used.
             rescale (bool): If True, return boxes in original image space.
-
         Returns:
             Tensor: Labeled boxes in shape (n, 5), where the first 4 columns
                 are bounding box positions (tl_x, tl_y, br_x, br_y) and the
