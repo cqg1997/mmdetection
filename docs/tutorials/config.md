@@ -1,4 +1,5 @@
-# Config System
+# Tutorial 1: Learn about Configs
+
 We incorporate modular and inheritance design into our config system, which is convenient to conduct various experiments.
 If you wish to inspect the config file, you may run `python tools/print_config.py /PATH/TO/CONFIG` to see the complete config.
 You may also pass `--cfg-options xxx.yyy=zzz` to see updated config.
@@ -341,7 +342,7 @@ optimizer = dict(  # Config used to build optimizer, support all the optimizers 
 optimizer_config = dict(  # Config used to build the optimizer hook, refer to https://github.com/open-mmlab/mmcv/blob/master/mmcv/runner/hooks/optimizer.py#L8 for implementation details.
     grad_clip=None)  # Most of the methods do not use gradient clip
 lr_config = dict(  # Learning rate scheduler config used to register LrUpdater hook
-    policy='step',  # The policy of scheduler, also support CosineAnealing, Cyclic, etc. Refer to details of supported LrUpdater from https://github.com/open-mmlab/mmcv/blob/master/mmcv/runner/hooks/lr_updater.py#L9.
+    policy='step',  # The policy of scheduler, also support CosineAnnealing, Cyclic, etc. Refer to details of supported LrUpdater from https://github.com/open-mmlab/mmcv/blob/master/mmcv/runner/hooks/lr_updater.py#L9.
     warmup='linear',  # The warmup policy, also support `exp` and `constant`.
     warmup_iters=500,  # The number of iterations for warmup
     warmup_ratio=
@@ -429,7 +430,7 @@ model = dict(
     neck=dict(...))
 ```
 
-The `_delete_=True` would replace all old keys in `backbone` field with new keys new keys.
+The `_delete_=True` would replace all old keys in `backbone` field with new keys.
 
 ### Use intermediate variables in configs
 

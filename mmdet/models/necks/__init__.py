@@ -1,4 +1,5 @@
 from .bfp import BFP
+from .channel_mapper import ChannelMapper
 from .fpn import FPN
 from .fpn_carafe import FPN_CARAFE
 from .hrfpn import HRFPN

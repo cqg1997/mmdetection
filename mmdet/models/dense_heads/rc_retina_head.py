@@ -345,7 +345,7 @@ class RCRetinaHead(AnchorHead):
                 labels,
                 num_total_anchors,
                 inside_flags,
-                fill=self.background_label)  # fill bg label
+                fill=0)  # fill bg label
             label_weights = unmap(label_weights, num_total_anchors,
                                   inside_flags)
 
