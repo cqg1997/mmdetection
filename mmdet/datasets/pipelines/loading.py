@@ -258,6 +258,10 @@ class LoadAnnotations(object):
         """
 
         results['gt_labels'] = results['ann_info']['labels'].copy()
+        ann_info = results['ann_info']
+        gt_labels_ignore = ann_info.get('labels_ignore', None)
+        if gt_labels_ignore is not None:
+            results['gt_labels_ignore'] = gt_labels_ignore.copy()
         return results
 
     def _poly2mask(self, mask_ann, img_h, img_w):

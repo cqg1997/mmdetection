@@ -59,7 +59,7 @@ class IoMAssigner(BaseAssigner):
         self.match_low_quality = match_low_quality
         self.iou_calculator = build_iou_calculator(iou_calculator)
 
-    def assign(self, bboxes, gt_bboxes, gt_bboxes_ignore=None, gt_labels=None):
+    def assign(self, bboxes, gt_bboxes, gt_bboxes_ignore=None, gt_labels=None, gt_labels_ignore=None):
         """Assign gt to bboxes.
 
         This method assign a gt bbox to every bbox (proposal/anchor), each bbox
@@ -103,6 +103,9 @@ class IoMAssigner(BaseAssigner):
                 gt_bboxes_ignore = gt_bboxes_ignore.cpu()
             if gt_labels is not None:
                 gt_labels = gt_labels.cpu()
+
+        gt_bboxes = torch.cat([gt_bboxes,gt_bboxes_ignore])
+        gt_labels = torch.cat([gt_labels,gt_labels_ignore])        
 
         overlaps = self.iou_calculator(gt_bboxes, bboxes, mode='ioMin')
 

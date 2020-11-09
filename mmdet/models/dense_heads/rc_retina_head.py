@@ -195,7 +195,7 @@ class RCRetinaHead(AnchorHead):
             gamma=2.0,
             alpha=0.25,
             avg_factor=num_total_samples)
-        return loss_region_cls[0],None
+        return loss_region_cls[0] ,None
 
     def loss(self,
              region_cls,
@@ -204,7 +204,8 @@ class RCRetinaHead(AnchorHead):
              gt_bboxes,
              gt_labels,
              img_metas,
-             gt_bboxes_ignore=None):
+             gt_bboxes_ignore=None,
+             gt_labels_ignore=None):
         loss = super(RCRetinaHead, self).loss(cls_scores,
                                               bbox_preds,
                                               gt_bboxes,
@@ -224,6 +225,7 @@ class RCRetinaHead(AnchorHead):
             gt_bboxes,
             img_metas,
             gt_bboxes_ignore_list=gt_bboxes_ignore,
+            gt_labels_ignore_list=gt_labels_ignore,
             gt_labels_list=gt_labels,
             label_channels=label_channels)
         if cls_reg_targets is None:
@@ -288,6 +290,7 @@ class RCRetinaHead(AnchorHead):
                                    gt_bboxes,
                                    gt_bboxes_ignore,
                                    gt_labels,
+                                   gt_labels_ignore,
                                    img_meta,
                                    label_channels=1,
                                    unmap_outputs=True):
@@ -302,12 +305,12 @@ class RCRetinaHead(AnchorHead):
 
         assign_result = self.region_assigner.assign(
             anchors, gt_bboxes, gt_bboxes_ignore,
-            None if self.sampling else gt_labels)
+            None if self.sampling else gt_labels, gt_labels_ignore)
         sampling_result = self.region_sampler.sample(assign_result, anchors,
                                                      gt_bboxes)
 
         num_valid_anchors = anchors.shape[0]
-        num_gts = gt_labels.shape[0]
+        num_gts = gt_labels.shape[0] + gt_labels_ignore.shape[0]
         # labels = anchors.new_full((num_gts, label_channels, num_valid_anchors),
         #                           self.background_label,
         #                           dtype=torch.long)
@@ -355,6 +358,7 @@ class RCRetinaHead(AnchorHead):
                            gt_bboxes_list,
                            img_metas,
                            gt_bboxes_ignore_list=None,
+                           gt_labels_ignore_list=None,
                            gt_labels_list=None,
                            label_channels=1,
                            unmap_outputs=True,
@@ -377,6 +381,8 @@ class RCRetinaHead(AnchorHead):
             gt_bboxes_ignore_list = [None for _ in range(num_imgs)]
         if gt_labels_list is None:
             gt_labels_list = [None for _ in range(num_imgs)]
+        if gt_labels_ignore_list is None:
+            gt_labels_ignore_list = [None for _ in range(num_imgs)]
         results = multi_apply(
             self._get_region_targets_single,
             concat_anchor_list,
@@ -384,6 +390,7 @@ class RCRetinaHead(AnchorHead):
             gt_bboxes_list,
             gt_bboxes_ignore_list,
             gt_labels_list,
+            gt_labels_ignore_list,
             img_metas,
             label_channels=label_channels,
             unmap_outputs=unmap_outputs)
@@ -416,5 +423,5 @@ class RCRetinaHead(AnchorHead):
                    cls_scores,
                    bbox_preds,
                    img_metas,
-                   cfg=None,
-                   rescale=False)
+                   cfg,
+                   rescale)

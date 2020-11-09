@@ -136,6 +136,7 @@ class CocoDataset(CustomDataset):
         gt_labels = []
         gt_bboxes_ignore = []
         gt_masks_ann = []
+        gt_labels_ignore = []
         for i, ann in enumerate(ann_info):
             if ann.get('ignore', False):
                 continue
@@ -151,6 +152,7 @@ class CocoDataset(CustomDataset):
             bbox = [x1, y1, x1 + w, y1 + h]
             if ann.get('iscrowd', False):
                 gt_bboxes_ignore.append(bbox)
+                gt_labels_ignore.append(self.cat2label[ann['category_id']])
             else:
                 gt_bboxes.append(bbox)
                 gt_labels.append(self.cat2label[ann['category_id']])
@@ -165,8 +167,10 @@ class CocoDataset(CustomDataset):
 
         if gt_bboxes_ignore:
             gt_bboxes_ignore = np.array(gt_bboxes_ignore, dtype=np.float32)
+            gt_labels_ignore = np.array(gt_labels_ignore, dtype=np.int64)
         else:
             gt_bboxes_ignore = np.zeros((0, 4), dtype=np.float32)
+            gt_labels_ignore = np.array([], dtype=np.int64)
 
         seg_map = img_info['filename'].replace('jpg', 'png')
 
@@ -174,6 +178,7 @@ class CocoDataset(CustomDataset):
             bboxes=gt_bboxes,
             labels=gt_labels,
             bboxes_ignore=gt_bboxes_ignore,
+            labels_ignore=gt_labels_ignore,
             masks=gt_masks_ann,
             seg_map=seg_map)
 
