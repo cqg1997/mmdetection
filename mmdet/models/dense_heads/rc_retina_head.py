@@ -46,7 +46,7 @@ class RCRetinaHead(AnchorHead):
 
         region_generator = dict(
             type='AnchorGenerator',
-            octave_base_scale=4 * 1.586 * 1.414,
+            octave_base_scale=1,
             scales_per_octave=1,
             ratios=[1.0],
             strides=[8, 16, 32, 64, 128])
@@ -56,9 +56,9 @@ class RCRetinaHead(AnchorHead):
         self.region_generator = build_anchor_generator(region_generator)
         self.region_assigner = build_assigner(dict(
             type='IoMAssigner',
-            pos_iom_thr=0.64,
-            neg_iom_thr=0.42,
-            min_iom2_thr=0.01,
+            pos_iom_thr=0.5,
+            neg_iom_thr=0.1,
+            min_iom2_thr=0.1,
             ignore_iof_thr=-1))
         self.region_sampler = build_sampler(dict(type='PseudoRegionSampler'), context=self)
         super(RCRetinaHead, self).__init__(
@@ -72,7 +72,7 @@ class RCRetinaHead(AnchorHead):
         self.relu = nn.ReLU(inplace=True)
         self.cls_convs = nn.ModuleList()
         self.reg_convs = nn.ModuleList()
-        self.region_convs = nn.ModuleList()
+        self.region_convs =nn.ModuleList()
         for i in range(self.stacked_convs):
             chn = self.in_channels if i == 0 else self.feat_channels
             self.cls_convs.append(
