@@ -429,6 +429,8 @@ class AnchorHead(BaseDenseHead, BBoxTestMixin):
                 bbox_pred_decoded.detach(),
                 bbox_targets_decoded.detach(),
                 is_aligned=True)
+            import pdb
+            pdb.set_trace()
             pos_inds = ((labels >= 0)
                         & (labels < self.num_classes)).nonzero().reshape(-1)
             pos_labels = labels[pos_inds]
@@ -457,7 +459,8 @@ class AnchorHead(BaseDenseHead, BBoxTestMixin):
              gt_bboxes,
              gt_labels,
              img_metas,
-             gt_bboxes_ignore=None):
+             gt_bboxes_ignore=None,
+             gt_labels_ignore=None):
         """Compute losses of the head.
 
         Args:

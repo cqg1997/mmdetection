@@ -25,6 +25,7 @@ from .vfnet_head import VFNetHead
 from .yolact_head import YOLACTHead, YOLACTProtonet, YOLACTSegmHead
 from .yolo_head import YOLOV3Head
 from .rc_retina_head import RCRetinaHead
+from .single_retina_head import SingleRetinaHead
 
 __all__ = [
     'AnchorFreeHead', 'AnchorHead', 'GuidedAnchorHead', 'FeatureAdaption',
@@ -32,5 +33,5 @@ __all__ = [
     'SSDHead', 'FCOSHead', 'RepPointsHead', 'FoveaHead',
     'FreeAnchorRetinaHead', 'ATSSHead', 'FSAFHead', 'NASFCOSHead',
     'PISARetinaHead', 'PISASSDHead', 'GFLHead', 'CornerHead', 'PAAHead',
-    'YOLOV3Head', 'SABLRetinaHead', 'RCRetinaHead'
+    'YOLOV3Head', 'SABLRetinaHead', 'RCRetinaHead', 'SingleRetinaHead'
 ]
