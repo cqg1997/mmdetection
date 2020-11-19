@@ -168,22 +168,22 @@ class IoUAffineAssigner(BaseAssigner):
         # for each gt, which anchor best overlaps with it
         # for each gt, the max iou of all proposals
         gt_max_overlaps, gt_argmax_overlaps = overlaps.max(dim=1)
-        import pdb
-        pdb.set_trace()
 
-        # 2. assign negative: below
-        # the negative inds are set to be 0
-        if isinstance(self.neg_iou_thr, float):
-            assigned_gt_inds[(max_overlaps >= 0)
-                             & (max_overlaps < self.neg_iou_thr)] = 0
-        elif isinstance(self.neg_iou_thr, tuple):
-            assert len(self.neg_iou_thr) == 2
-            assigned_gt_inds[(max_overlaps >= self.neg_iou_thr[0])
-                             & (max_overlaps < self.neg_iou_thr[1])] = 0
 
-        # 3. assign positive: above positive IoU threshold
-        pos_inds = max_overlaps >= self.pos_iou_thr
-        assigned_gt_inds[pos_inds] = argmax_overlaps[pos_inds] + 1
+        # bbox_target
+        for i in range(num_gts):
+            inds = torch.nonzero(argmax_overlaps == i & max_overlaps > self.pos_iou_thr)
+            top_k = min(len(inds), 25)
+            _, choice = torch.topk(max_overlaps[inds], top_k, dim=0)
+            pos_inds = inds[choice].view(-1)
+            assigned_gt_inds[pos_inds] = i + 1
+
+        # cls_target
+        iou_labels = overlaps.new_zeros((num_bboxes, self.num_classes))
+        unique_gt_labels = gt_labels.unique()
+        for i in unique_gt_labels:
+            iou_labels[:, i], _ = overlaps[gt_labels == i, :].max(dim=0)
+
 
         if self.match_low_quality:
             # Low-quality matching will overwirte the assigned_gt_inds assigned
@@ -202,15 +202,9 @@ class IoUAffineAssigner(BaseAssigner):
                     else:
                         assigned_gt_inds[gt_argmax_overlaps[i]] = i + 1
 
-        if gt_labels is not None:
-            assigned_labels = assigned_gt_inds.new_full((num_bboxes, ), -1)
-            pos_inds = torch.nonzero(
-                assigned_gt_inds > 0, as_tuple=False).squeeze()
-            if pos_inds.numel() > 0:
-                assigned_labels[pos_inds] = gt_labels[
-                    assigned_gt_inds[pos_inds] - 1]
-        else:
-            assigned_labels = None
+        import pdb
+        pdb.set_trace()
+
 
         return AssignResult(
-            num_gts, assigned_gt_inds, max_overlaps, labels=assigned_labels)
+            num_gts, assigned_gt_inds, max_overlaps, labels=iou_labels)
