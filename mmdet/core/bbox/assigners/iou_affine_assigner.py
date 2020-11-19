@@ -41,6 +41,7 @@ class IoUAffineAssigner(BaseAssigner):
                  pos_iou_thr,
                  neg_iou_thr,
                  min_pos_iou=.0,
+                 num_classes=80,
                  gt_max_assign_all=True,
                  ignore_iof_thr=-1,
                  ignore_wrt_candidates=True,
@@ -56,8 +57,9 @@ class IoUAffineAssigner(BaseAssigner):
         self.gpu_assign_thr = gpu_assign_thr
         self.match_low_quality = match_low_quality
         self.iou_calculator = build_iou_calculator(iou_calculator)
+        self.num_classes= num_classes
 
-    def assign(self, bboxes, gt_bboxes, num_classes, gt_bboxes_ignore=None, gt_labels=None):
+    def assign(self, bboxes, gt_bboxes, gt_bboxes_ignore=None, gt_labels=None):
         """Assign gt to bboxes.
 
         This method assign a gt bbox to every bbox (proposal/anchor), each bbox
@@ -116,7 +118,7 @@ class IoUAffineAssigner(BaseAssigner):
                 ignore_max_overlaps, _ = ignore_overlaps.max(dim=0)
             overlaps[:, ignore_max_overlaps > self.ignore_iof_thr] = -1
 
-        assign_result = self.assign_wrt_overlaps(overlaps, num_classes, gt_labels)
+        assign_result = self.assign_wrt_overlaps(overlaps, gt_labels)
         if assign_on_cpu:
             assign_result.gt_inds = assign_result.gt_inds.to(device)
             assign_result.max_overlaps = assign_result.max_overlaps.to(device)
@@ -124,7 +126,7 @@ class IoUAffineAssigner(BaseAssigner):
                 assign_result.labels = assign_result.labels.to(device)
         return assign_result
 
-    def assign_wrt_overlaps(self, overlaps, num_classes, gt_labels=None):
+    def assign_wrt_overlaps(self, overlaps, gt_labels=None):
         """Assign w.r.t. the overlaps of bboxes with gts.
 
         Args:
