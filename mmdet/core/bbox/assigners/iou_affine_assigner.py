@@ -144,6 +144,8 @@ class IoUAffineAssigner(BaseAssigner):
                                              -1,
                                              dtype=torch.long)
 
+        iou_labels = overlaps.new_zeros((num_bboxes, self.num_classes))
+
         if num_gts == 0 or num_bboxes == 0:
             # No ground truth or boxes, return empty assignment
             max_overlaps = overlaps.new_zeros((num_bboxes, ))
@@ -160,7 +162,7 @@ class IoUAffineAssigner(BaseAssigner):
                 num_gts,
                 assigned_gt_inds,
                 max_overlaps,
-                labels=assigned_labels)
+                labels=iou_labels)
 
         # for each anchor, which gt best overlaps with it
         # for each anchor, the max iou of all gts
@@ -172,14 +174,13 @@ class IoUAffineAssigner(BaseAssigner):
 
         # bbox_target
         for i in range(num_gts):
-            inds = torch.nonzero(argmax_overlaps == i & max_overlaps > self.pos_iou_thr)
+            inds = torch.nonzero((argmax_overlaps == i) & (max_overlaps > self.pos_iou_thr))
             top_k = min(len(inds), 25)
             _, choice = torch.topk(max_overlaps[inds], top_k, dim=0)
             pos_inds = inds[choice].view(-1)
             assigned_gt_inds[pos_inds] = i + 1
 
         # cls_target
-        iou_labels = overlaps.new_zeros((num_bboxes, self.num_classes))
         unique_gt_labels = gt_labels.unique()
         for i in unique_gt_labels:
             iou_labels[:, i], _ = overlaps[gt_labels == i, :].max(dim=0)

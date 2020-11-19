@@ -231,57 +231,49 @@ class AnchorHead(BaseDenseHead, BBoxTestMixin):
         assign_result = self.assigner.assign(
             anchors_refine, gt_bboxes, gt_bboxes_ignore,
             None if self.sampling else gt_labels)
-        sampling_result = self.sampler.sample(assign_result, anchors,
-                                              gt_bboxes)
 
         num_valid_anchors = anchors.shape[0]
+        labels = assign_result.labels
+        max_overlaps = assign_result.max_overlaps
+        bbox_inds = torch.nonzero(assign_result.gt_inds > 0, as_tuple=False).squeeze(-1).unique()
+        cls_inds = torch.nonzero(assign_result.max_overlaps > 0, as_tuple=False).squeeze(-1).unique()
+
+        label_weights = anchors.new_zeros(num_valid_anchors, dtype=torch.float)
         bbox_targets = torch.zeros_like(anchors)
         bbox_weights = torch.zeros_like(anchors)
-        labels = anchors.new_full((num_valid_anchors, ),
-                                  self.num_classes,
-                                  dtype=torch.long)
-        label_weights = anchors.new_zeros(num_valid_anchors, dtype=torch.float)
 
-        pos_inds = sampling_result.pos_inds
-        neg_inds = sampling_result.neg_inds
-        max_overlaps= assign_result.max_overlaps
-        if len(pos_inds) > 0:
+        if len(cls_inds) > 0:
+            label_weights[cls_inds] = 1.0
+        if len(bbox_inds) > 0:
+            pos_bboxes = anchors[bbox_inds]
+            if gt_bboxes.numel() == 0:
+                pos_gt_bboxes = torch.empty_like(gt_bboxes).view(-1, 4)
+            else:
+                pos_assigned_gt_inds = assign_result.gt_inds[bbox_inds] - 1
+                pos_gt_bboxes = gt_bboxes[pos_assigned_gt_inds, :]
             if not self.reg_decoded_bbox:
                 pos_bbox_targets = self.bbox_coder.encode(
-                    sampling_result.pos_bboxes, sampling_result.pos_gt_bboxes)
+                    pos_bboxes, pos_gt_bboxes)
             else:
-                pos_bbox_targets = sampling_result.pos_gt_bboxes
-            bbox_targets[pos_inds, :] = pos_bbox_targets
-            bbox_weights[pos_inds, :] = 1.0
-            if gt_labels is None:
-                # Only rpn gives gt_labels as None
-                # Foreground is the first class since v2.5.0
-                labels[pos_inds] = 0
-            else:
-                labels[pos_inds] = gt_labels[
-                    sampling_result.pos_assigned_gt_inds]
-            if self.train_cfg.pos_weight <= 0:
-                label_weights[pos_inds] = 1.0
-            else:
-                label_weights[pos_inds] = self.train_cfg.pos_weight
-        if len(neg_inds) > 0:
-            label_weights[neg_inds] = 1.0
+                pos_bbox_targets = pos_gt_bboxes
+            bbox_targets[bbox_inds, :] = pos_bbox_targets
+            bbox_weights[bbox_inds, :] = 1.0
 
         # map up to original set of anchors
         if unmap_outputs:
             num_total_anchors = flat_anchors.size(0)
             labels = unmap(
                 labels, num_total_anchors, inside_flags,
-                fill=self.num_classes)  # fill bg label
-            max_overlaps = unmap(max_overlaps, num_total_anchors,
-                                  inside_flags)
+                fill=0.0)  # fill bg cls
             label_weights = unmap(label_weights, num_total_anchors,
                                   inside_flags)
             bbox_targets = unmap(bbox_targets, num_total_anchors, inside_flags)
             bbox_weights = unmap(bbox_weights, num_total_anchors, inside_flags)
 
-        return (labels, label_weights, bbox_targets, bbox_weights, pos_inds,
-                neg_inds, sampling_result, max_overlaps)
+        import pdb
+        pdb.set_trace()
+        return (labels, label_weights, bbox_targets, bbox_weights, bbox_inds,
+                cls_inds, max_overlaps)
 
     def get_targets(self,
                     anchor_list,
@@ -369,14 +361,14 @@ class AnchorHead(BaseDenseHead, BBoxTestMixin):
             label_channels=label_channels,
             unmap_outputs=unmap_outputs)
         (all_labels, all_label_weights, all_bbox_targets, all_bbox_weights,
-         pos_inds_list, neg_inds_list, sampling_results_list, all_max_overlaps) = results[:8]
-        rest_results = list(results[8:])  # user-added return values
+         bbox_inds_list, cls_inds_list, all_max_overlaps) = results[:7]
+        rest_results = list(results[7:])  # user-added return values
         # no valid anchors
         if any([labels is None for labels in all_labels]):
             return None
         # sampled anchors of all images
-        num_total_pos = sum([max(inds.numel(), 1) for inds in pos_inds_list])
-        num_total_neg = sum([max(inds.numel(), 1) for inds in neg_inds_list])
+        num_total_bbox = sum([max(inds.numel(), 1) for inds in bbox_inds_list])
+        num_total_cls = sum([max(inds.numel(), 1) for inds in cls_inds_list])
         # split targets to a list w.r.t. multiple levels
         labels_list = images_to_levels(all_labels, num_level_anchors)
         max_overlaps_list = images_to_levels(all_max_overlaps, num_level_anchors)
@@ -387,15 +379,15 @@ class AnchorHead(BaseDenseHead, BBoxTestMixin):
         bbox_weights_list = images_to_levels(all_bbox_weights,
                                              num_level_anchors)
         res = (labels_list, label_weights_list, bbox_targets_list,
-               bbox_weights_list, num_total_pos, num_total_neg, max_overlaps_list)
-        if return_sampling_results:
-            res = res + (sampling_results_list, )
+               bbox_weights_list, num_total_bbox, num_total_cls, max_overlaps_list)
         for i, r in enumerate(rest_results):  # user-added return values
             rest_results[i] = images_to_levels(r, num_level_anchors)
+        import pdb
+        pdb.set_trace()
         return res + tuple(rest_results)
 
     def loss_single(self, cls_score, bbox_pred, anchors, labels, label_weights,
-                    bbox_targets, bbox_weights, max_overlaps, num_total_samples):
+                    bbox_targets, bbox_weights, max_overlaps, num_total_bbox,num_total_cls):
         """Compute loss of a single scale level.
 
         Args:
@@ -421,7 +413,6 @@ class AnchorHead(BaseDenseHead, BBoxTestMixin):
             dict[str, Tensor]: A dictionary of loss components.
         """
         # classification loss
-        labels = labels.reshape(-1)
         max_overlaps = max_overlaps.reshape(-1)
         label_weights = label_weights.reshape(-1)
         cls_score = cls_score.permute(0, 2, 3,
@@ -444,25 +435,22 @@ class AnchorHead(BaseDenseHead, BBoxTestMixin):
                 bbox_pred_decoded.detach(),
                 bbox_targets_decoded.detach(),
                 is_aligned=True)
-            pos_inds = ((labels >= 0)
-                        & (labels < self.num_classes)).nonzero().reshape(-1)
-            pos_labels = labels[pos_inds]
+            pos_inds = (label_weights > 0).nonzero().reshape(-1)
             pos_ious = ious[pos_inds]
-            cls_iou_targets = torch.zeros_like(cls_score)
-            cls_iou_targets[pos_inds, pos_labels] = pos_ious
+            import pdb
+            pdb.set_trace()
             loss_cls = self.loss_cls(
                 cls_score,
-                cls_iou_targets,
+                labels,
                 label_weights.unsqueeze(1),
-                avg_factor=num_total_samples)
+                avg_factor=num_total_cls)
         else:
-            loss_cls = self.loss_cls(
-                cls_score, labels, label_weights, avg_factor=num_total_samples)
+            assert False
         loss_bbox = self.loss_bbox(
             bbox_pred,
             bbox_targets,
             bbox_weights,
-            avg_factor=num_total_samples)
+            avg_factor=num_total_bbox)
         return loss_cls, loss_bbox
 
     @force_fp32(apply_to=('cls_scores', 'bbox_preds'))
@@ -512,9 +500,7 @@ class AnchorHead(BaseDenseHead, BBoxTestMixin):
         if cls_reg_targets is None:
             return None
         (labels_list, label_weights_list, bbox_targets_list, bbox_weights_list,
-         num_total_pos, num_total_neg, max_overlaps_list) = cls_reg_targets
-        num_total_samples = (
-            num_total_pos + num_total_neg if self.sampling else num_total_pos)
+         num_total_bbox, num_total_cls, max_overlaps_list) = cls_reg_targets
 
         # anchor number of multi levels
         num_level_anchors = [anchors.size(0) for anchors in anchor_list[0]]
@@ -535,7 +521,8 @@ class AnchorHead(BaseDenseHead, BBoxTestMixin):
             bbox_targets_list,
             bbox_weights_list,
             max_overlaps_list,
-            num_total_samples=num_total_samples)
+            num_total_bbox=num_total_bbox,
+            num_total_cls=num_total_cls)
         return dict(loss_cls=losses_cls, loss_bbox=losses_bbox)
 
     @force_fp32(apply_to=('cls_scores', 'bbox_preds'))
